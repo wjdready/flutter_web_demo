@@ -38,8 +38,6 @@ class _TaskScreenState extends State<TaskScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() =>
-        Provider.of<TaskProvider>(context, listen: false).loadTasks());
   }
 
   @override

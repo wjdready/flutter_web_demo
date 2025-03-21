@@ -1,13 +1,14 @@
 import 'package:flutter/foundation.dart';
 import '../models/task.dart';
 import '../services/task_service.dart';
+import '../services/config_service.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
 
 class TaskProvider with ChangeNotifier {
   final TaskService _taskService = TaskService();
   List<Task> _tasks = [];
-  late WebSocketChannel _channel;
+  WebSocketChannel? _channel;
   bool _connected = false;
   bool _isLoading = true;
   String? _error;
@@ -18,20 +19,40 @@ class TaskProvider with ChangeNotifier {
   List<Task> get tasks => List.unmodifiable(_tasks);
 
   TaskProvider() {
-    _connectWebSocket();
+    _initialize();
   }
 
-  void _connectWebSocket() {
+  Future<void> _initialize() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
+
+    try {
+      // 先初始化服务配置
+      await TaskService.initialize();
+      // 然后连接 WebSocket
+      await _connectWebSocket();
+    } catch (e) {
+      _error = '初始化失败: $e';
+      _isLoading = false;
+      notifyListeners();
+      // 5秒后重试
+      Future.delayed(Duration(seconds: 5), _initialize);
+    }
+  }
+
+  Future<void> _connectWebSocket() async {
+    if (_channel != null) {
+      await _channel!.sink.close();
+      _channel = null;
+    }
 
     try {
       _channel = WebSocketChannel.connect(
         Uri.parse(TaskService.wsUrl),
       );
 
-      _channel.stream.listen(
+      _channel!.stream.listen(
         (message) {
           final data = json.decode(message);
           switch (data['type']) {
@@ -50,7 +71,7 @@ class TaskProvider with ChangeNotifier {
           _error = '连接已断开';
           notifyListeners();
           // 尝试重新连接
-          Future.delayed(Duration(seconds: 5), _connectWebSocket);
+          Future.delayed(Duration(seconds: 5), _initialize);
         },
         onError: (error) {
           print('WebSocket error: $error');
@@ -58,6 +79,8 @@ class TaskProvider with ChangeNotifier {
           _error = '连接错误: $error';
           _isLoading = false;
           notifyListeners();
+          // 尝试重新连接
+          Future.delayed(Duration(seconds: 5), _initialize);
         },
       );
     } catch (e) {
@@ -65,7 +88,7 @@ class TaskProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       // 尝试重新连接
-      Future.delayed(Duration(seconds: 5), _connectWebSocket);
+      Future.delayed(Duration(seconds: 5), _initialize);
     }
   }
 
@@ -90,8 +113,14 @@ class TaskProvider with ChangeNotifier {
   }
 
   Future<void> addTask(String title) async {
+    if (_channel == null) {
+      _error = '未连接到服务器';
+      notifyListeners();
+      return;
+    }
+
     try {
-      _channel.sink.add(json.encode({
+      _channel!.sink.add(json.encode({
         'type': 'add',
         'title': title,
       }));
@@ -102,8 +131,14 @@ class TaskProvider with ChangeNotifier {
   }
 
   Future<void> toggleTask(int id) async {
+    if (_channel == null) {
+      _error = '未连接到服务器';
+      notifyListeners();
+      return;
+    }
+
     try {
-      _channel.sink.add(json.encode({
+      _channel!.sink.add(json.encode({
         'type': 'toggle',
         'id': id,
       }));
@@ -114,8 +149,14 @@ class TaskProvider with ChangeNotifier {
   }
 
   Future<void> deleteTask(int id) async {
+    if (_channel == null) {
+      _error = '未连接到服务器';
+      notifyListeners();
+      return;
+    }
+
     try {
-      _channel.sink.add(json.encode({
+      _channel!.sink.add(json.encode({
         'type': 'delete',
         'id': id,
       }));
@@ -127,7 +168,7 @@ class TaskProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _channel.sink.close();
+    _channel?.sink.close();
     super.dispose();
   }
 } 

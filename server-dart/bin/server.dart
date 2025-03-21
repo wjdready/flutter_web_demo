@@ -101,6 +101,17 @@ void main() async {
   final store = TaskStore(connections);
   final app = Router();
 
+  // 添加健康检查接口
+  app.get('/health', (shelf.Request request) {
+    return shelf.Response.ok(
+      json.encode({'status': 'ok', 'timestamp': DateTime.now().toIso8601String()}),
+      headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+    );
+  });
+
   // WebSocket 处理
   app.get('/ws', webSocketHandler((WebSocketChannel webSocket, String? protocol) {
     print('新的客户端连接');
@@ -191,26 +202,40 @@ void main() async {
   });
 
   // 创建处理管道
-  final handler = const shelf.Pipeline()
-      .addMiddleware(corsHeaders(headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Origin, Content-Type',
-      }))
+  final handler = shelf.Pipeline()
       .addMiddleware(shelf.logRequests())
+      .addMiddleware((innerHandler) {
+        return (request) async {
+          if (request.method == 'OPTIONS') {
+            return shelf.Response.ok('', headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+              'Access-Control-Allow-Headers': 'Origin, Content-Type',
+            });
+          }
+          final response = await innerHandler(request);
+          return response.change(headers: {
+            'Access-Control-Allow-Origin': '*',
+            ...response.headers,
+          });
+        };
+      })
       .addHandler(app);
 
   // 启动服务器，监听所有网络接口
   final server = await io.serve(
     handler, 
-    InternetAddress.anyIPv4,  // 监听所有IPv4地址
+    InternetAddress.anyIPv4,
     3000,
-    shared: true,  // 允许端口共享
+    shared: true,
   );
+
+  // 创建一个状态文件表明服务器已启动
+  File('server_ready.txt').writeAsStringSync('ready');
+
   print('服务器运行在: http://${server.address.host}:${server.port}');
   print('可以通过以下地址访问：');
   print('- http://localhost:3000');
-  print('- http://${InternetAddress.anyIPv4.address}:3000');
   
   // 获取本机所有网络接口
   NetworkInterface.list().then((interfaces) {

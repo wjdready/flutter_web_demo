@@ -1,16 +1,25 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/task.dart';
+import 'config_service.dart';
 
 class TaskService {
-  // 修改为您的服务器 IP 地址
-  static const String serverHost = '192.168.1.89'; // 替换为您的实际 IP 地址
-  static const int serverPort = 3000;
-  
-  static String get baseUrl => 'http://$serverHost:$serverPort';
-  static String get wsUrl => 'ws://$serverHost:$serverPort/ws';
+  static String? _serverHost;
+  static int? _serverPort;
+  static int? _wsPort;
+
+  static Future<void> initialize() async {
+    final config = await ConfigService.getServerConfig();
+    _serverHost = config['serverHost'] as String;
+    _serverPort = config['serverPort'] as int;
+    _wsPort = config['wsPort'] as int;
+  }
+
+  static String get baseUrl => 'http://$_serverHost:$_serverPort';
+  static String get wsUrl => 'ws://$_serverHost:$_wsPort/ws';
 
   Future<List<Task>> getTasks() async {
+    if (_serverHost == null) await TaskService.initialize();
     final response = await http.get(Uri.parse(baseUrl));
     if (response.statusCode == 200) {
       final List<dynamic> jsonList = json.decode(response.body);
@@ -21,6 +30,7 @@ class TaskService {
   }
 
   Future<void> addTask(String title) async {
+    if (_serverHost == null) await TaskService.initialize();
     final response = await http.post(
       Uri.parse(baseUrl),
       headers: {'Content-Type': 'application/json'},
@@ -32,6 +42,7 @@ class TaskService {
   }
 
   Future<void> toggleTask(int id) async {
+    if (_serverHost == null) await TaskService.initialize();
     final response = await http.put(Uri.parse('$baseUrl/$id'));
     if (response.statusCode != 200) {
       throw Exception('更新任务状态失败');
@@ -39,6 +50,7 @@ class TaskService {
   }
 
   Future<void> deleteTask(int id) async {
+    if (_serverHost == null) await TaskService.initialize();
     final response = await http.delete(Uri.parse('$baseUrl/$id'));
     if (response.statusCode != 200) {
       throw Exception('删除任务失败');

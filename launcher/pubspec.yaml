@@ -1,0 +1,13 @@
+name: flutter_app_launcher
+description: Launcher for Flutter app with server
+version: 1.0.0
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  path: ^1.8.0
+  shelf: ^1.4.1
+  shelf_static: ^1.1.2
+  shelf_router: ^1.1.4
+  http: ^1.1.0 
