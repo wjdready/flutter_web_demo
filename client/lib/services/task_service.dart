@@ -3,7 +3,12 @@ import 'package:http/http.dart' as http;
 import '../models/task.dart';
 
 class TaskService {
-  static const String baseUrl = 'http://localhost:3000';
+  // 修改为您的服务器 IP 地址
+  static const String serverHost = '192.168.1.89'; // 替换为您的实际 IP 地址
+  static const int serverPort = 3000;
+  
+  static String get baseUrl => 'http://$serverHost:$serverPort';
+  static String get wsUrl => 'ws://$serverHost:$serverPort/ws';
 
   Future<List<Task>> getTasks() async {
     final response = await http.get(Uri.parse(baseUrl));
